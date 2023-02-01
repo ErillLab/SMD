@@ -1,0 +1,19 @@
+{
+	"reference_proteins" : [{"prot_id" : "WP_011079176"}],
+	"target_clade" : 135623,
+	"BLAST_parameters" : {
+			"e_value" : 10e-05,
+			"query_coverage" : 0.75,
+			"database" : "nr",
+			"max_results" : 10,
+			"min_intergenic_distance" : 150,
+            "hierarchical_taxon_level" : "family"
+  },
+	"entrez_parameters" : {
+					"email" : "hannahn281@gmail.com",
+					"NCBI_API_key" : "88b84a11abf0d5ba821b124a98c497884108",
+					"sleep_time" : 1,
+					"retry_number" : 3
+				   }
+
+}
