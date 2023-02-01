@@ -6,7 +6,8 @@
 			"query_coverage" : 0.75,
 			"database" : "nr",
 			"max_results" : 10,
-			"min_intergenic_distance" : 150,
+			"min_intergenic_distance" : 100,
+			"base_pairs_to_grab" : 10000,
             "hierarchical_taxon_level" : "family"
   },
 	"entrez_parameters" : {

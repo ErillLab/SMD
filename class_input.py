@@ -51,6 +51,7 @@ class theInput:
             # Fetches the protein record based off the accession number
             print("Getting protein record...")
 
+            print('Hello!')
             for i in range(self.entrez_param["retry_number"]):
 
                 try:
@@ -65,7 +66,7 @@ class theInput:
                         print("\tCould not download record after " + str(self.entrez_param["retry_number"]) + " attempts")
 
             # Fetches the protein sequence (from record) to be used in the BLAST search
-            print("Getting protein sequence...")
+            print("Getting protein sequence...\n")
             input_seq = (SeqIO.read(handle, "fasta")).seq
 
             # Performs the BLAST using parameters from json file
@@ -146,7 +147,7 @@ class theInput:
                             print("\t\tAdding hit: " + str(curr_hit_rec))
                             hits.append((ref_protein, curr_hit_rec))
 
-        print("\tReturning " + str(len(hits)) + " unique hits")
+        print("\tReturning " + str(len(hits)) + " unique hits\n")
         return hits
 
 
@@ -188,9 +189,6 @@ class theInput:
         for i in range(len(desired_descendants)):
             self.target_clade = desired_descendants[i]
             original_hits.append(self.reg_BLAST_search())
-
-        print("here ")
-        print(original_hits)
 
         # make the target clade back to what it was originally (before search)
         self.target_clade = target_clade
