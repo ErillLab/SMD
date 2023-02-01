@@ -51,7 +51,6 @@ class theInput:
             # Fetches the protein record based off the accession number
             print("Getting protein record...")
 
-            print('Hello!')
             for i in range(self.entrez_param["retry_number"]):
 
                 try:
