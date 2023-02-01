@@ -19,20 +19,20 @@ class theOrtholog:
         self.blast_param = the_input.blast_param
         self.entrez_param = the_input.entrez_param
         # result from get_nuc_rec
-        self.nuc_rec
+        self.nuc_rec = []
         # result from get_nec_seq
-        self.nuc_seq
+        self.nuc_seq = []
 
 
     def get_nuc_rec(self):
-        print("Getting IPG nucelotide records for " + str(self.hit[0]['prot_id']) + "...")
+        print("Getting IPG nucelotide records for " + str(self.hit[1]) + "...")
         # Fetch the protein record
-        print("Fetching the protein records...")
+        print("\tFetching the protein records...")
 
         for i in range(self.entrez_param["retry_number"]):
 
             try:
-                records = Entrez.read(Entrez.efetch(db="protein", id=self.hit[0]['prot_id'], rettype="ipg",
+                records = Entrez.read(Entrez.efetch(db="protein", id=self.hit[1], rettype="ipg",
                                                     retmode="xml"))
                 time.sleep(self.entrez_param["sleep_time"])
                 break
@@ -42,7 +42,7 @@ class theOrtholog:
 
                 if i == (self.entrez_param["retry_number"] - 1):
                     print("\t\tCould not download record after " + str(self.entrez_param["retry_number"]) + " attempts")
-                    print("\tNo gene records found for " + str(self.hit[0]['prot_id']))
+                    print("\tNo gene records found for " + str(self.hit[1]))
                     return None
 
         # The priority scores for the types of gene records available
@@ -58,9 +58,10 @@ class theOrtholog:
         # Gene records are appended to this list
         genome_list = []
 
-        print("\t|~> Recording the gene records with priorities")
+        print("\tRecording the gene records with priorities...")
         if 'ProteinList' in records['IPGReport'].keys():
             for idprotein in records['IPGReport']['ProteinList']:
+                # focuses on coding regions in the record
                 if 'CDSList' in idprotein.keys():
                     for cds in idprotein['CDSList']:
                         cds_acc = cds.attributes['accver']
@@ -77,10 +78,9 @@ class theOrtholog:
                                    'stop': cds_stop, 'strand': cds_strand,
                                    'p_score': cds_scr}
                         genome_list.append(cds_rec)
-                else:
-                    continue
+
         else:
-            print("\tNo gene records found for " + self.hit[0]['prot_id'])
+            print("\tNo gene records found for " + self.hit[1])
             return None
 
         # Finds the genome with the max p-score
@@ -90,134 +90,121 @@ class theOrtholog:
                 if genome["p_score"] > max_p_record["p_score"]:
                     max_p_record = genome
 
-            print("\tReturning gene record for " + self.hit[0]['prot_id'] + ". p-score: " +
+            print("\tReturning gene record for " + self.hit[1] + ". p-score: " +
                   str(max_p_record["p_score"]))
             self.nuc_rec = max_p_record
             return max_p_record
+
         else:
-            print("\tNo gene records found for " + self.hit[0]['prot_id'])
+            print("\tNo gene records found for " + self.hit[1])
             return None
 
 
-        def get_nuc_seq(self):
-            if self.nuc_rec is None:
-                print("\tRecord is not valid...")
-                return None
+    def get_nuc_seq(self):
+        if self.nuc_rec is None:
+            print("\tRecord is not valid")
+            return None
 
-            print("Get nucleotide sequence for " + str(nuc_rec['acc']) + "...")
+        print("Get nucleotide sequence for " + str(self.nuc_rec['acc']) + "...")
 
-            print("\tAdjusting start and stop positions...")
+        # grabs upstream region some parameter base pairs away from start to check for operons
+        if self.nuc_rec['strand'] == '+':
+            s_start = int(self.nuc_rec['start']) - self.blast_param["base_pairs_to_grab"]
+            if s_start <= 0:
+                s_start = 1
+            s_stop = int(self.nuc_rec['stop'])
+            s_strand = 1
+        else:
+            s_stop = int(self.nuc_rec['stop'])
+            s_start = int(self.nuc_rec['start']) + self.blast_param["base_pairs_to_grab"]
+            s_strand = 2
 
-            if nuc_rec['strand'] == '+':
-                s_start = int(nuc_rec['start']) - start_adj
-                s_stop = int(nuc_rec['start']) + stop_adj
-                s_strand = 1
-            else:
-                s_stop = int(nuc_rec['stop']) + start_adj
-                s_start = int(nuc_rec['stop']) - stop_adj
-                s_strand = 2
 
-            if isolate_promoters:
+        print("start " + str(s_start))
+        print("stop " + str(s_stop))
 
-                print("\t|~> Getting genbank record")
+        print("\t\tGetting genbank record...")
 
-                # Fetch and read the annotated GenBank record
+        # Fetch and read the annotated GenBank record
+        for i in range(self.entrez_param["retry_number"]):
+            try:
+                handle = Entrez.efetch(db="nuccore", id=self.nuc_rec['acc'], strand=s_strand,
+                                       seq_start=s_start, seq_stop=s_stop,
+                                       rettype='gbwithparts', retmode="xml")
 
-                for i in range(REQUEST_LIMIT):
+                genome_record = Entrez.read(handle, "xml")
+                time.sleep(self.entrez_param["sleep_time"])
+                break
 
-                    try:
+            except:
 
-                        handle = Entrez.efetch(db="nuccore", id=nuc_rec['acc'], strand=s_strand,
-                                               seq_start=s_start, seq_stop=s_stop,
-                                               rettype='gbwithparts', retmode="XML")
+                print("\t\tNCBI exception raised on attempt " + str(i) + "\n\t\treattempting now...")
 
-                        genome_record = Entrez.read(handle, "xml")
+                if i == (self.entrez_param["retry_number"] - 1):
+                    print("\t\tCould not download record after " + str(self.entrez_param["retry_number"]) + " attempts")
 
-                        time.sleep(SLEEP_TIME)
-                        break
+        print("\t\tParsing intervals for coding regions...")
+        # Find all coding regions in the returned GenBank sequence.
+        coding_intervals = []
 
-                    except:
+        sequence = genome_record[0]['GBSeq_sequence']
 
-                        print("\t\tNCBI exception raised on attempt " + str(i) + "\n\t\treattempting now...")
-
-                        if i == (REQUEST_LIMIT - 1):
-                            print("\t\tCould not download record after " + str(REQUEST_LIMIT) + " attempts")
-
-                print("\t|~> Parsing intervals for coding regions")
-                # Find all coding regions in the returned GenBank sequence.
-                coding_intervals = []
-
-                sequence = genome_record[0]['GBSeq_sequence']
-
-                for feature in genome_record[0]['GBSeq_feature-table']:
-                    if feature['GBFeature_key'] == 'gene':
-                        if "GBInterval_from" in feature['GBFeature_intervals'][0]:
-                            coding_start = feature['GBFeature_intervals'][0]['GBInterval_from']
-                            coding_end = feature['GBFeature_intervals'][0]['GBInterval_to']
-                            coding_intervals.append((coding_start, coding_end))
-
-                # The FASTA ID for the promoter sequence is in the following format:
-                # p_NucleotideRecord
-                print("\t|~> Returning promoter sequence")
-                return_id = "p_" + str(nuc_rec['acc'])
-
-                # Setting up the description for the FASTA record
-                return_description = "Original_Query_Protein " + str(nuc_rec_in[0]) + " BLAST_Hit_Accession " + str(
-                    nuc_rec_in[1])
-
-                # If there is only one coding region in the selected sequence, then
-                # the sequence is returned unmodified.
-                if len(coding_intervals) == 1:
-                    # Appends information to record description
-                    print("\t\t|~>No-additional-coding-regions-found-Returning-full-sequence")
-                    return SeqRecord(Seq.Seq(sequence), id=return_id, description=return_description)
-
-                # If no coding intervals are indentified, None is returned.
-                elif len(coding_intervals) == 0:
-                    print("\t\t|~> No coding intervals found for record: " + str(nuc_rec['acc']) + ".")
-                    return None
-
-                # The start of the promoter is set to the start/end of the upstream gene
-                # based on the directionality. ( --> --> or <-- -->)
-                # If there was no downstream adjustment, then the last record in the list is upstream from the feature of interest.
-                # If there was a downstream adjustment, then the second to last record in the list is upstream from the feature of interest.
-
-                if stop_adj > 0:
-                    promoter_start = max(int(coding_intervals[-2][0]), int(coding_intervals[-2][1]))
+        for feature in genome_record[0]['GBSeq_feature-table']:
+            if feature['GBFeature_key'] == 'gene':
+                if feature['GBFeature_location'].startswith("complement"):
+                    strand = 2
                 else:
-                    promoter_start = max(int(coding_intervals[-1][0]), int(coding_intervals[-1][1]))
+                    strand = 1
+                if "GBInterval_from" in feature['GBFeature_intervals'][0]:
+                    coding_start = feature['GBFeature_intervals'][0]['GBInterval_from']
+                    coding_end = feature['GBFeature_intervals'][0]['GBInterval_to']
+                    coding_intervals.append((int(coding_start), int(coding_end), strand))
 
-                # Everything upstream of the promoter start is clipped off the
-                # sequence and the substring is returned.
-                return_seq = str(sequence[promoter_start:])
-                # Appends information to record description
-                print("\t\t|~>Successfully-clipped-off-upstream-coding-regions")
-                return SeqRecord(Seq.Seq(return_seq), id=return_id, description=return_description)
+        print(coding_intervals)
 
-            # If promoters aren't being isolated
-            else:
+        # setting up return id
+        return_id = "p_" + str(self.nuc_rec['acc'])
 
-                print("\t|~> Getting FASTA record")
-                # Fetch the requested nucleotide sequence and return without any
-                # modification.
+        #Setting up the description for the FASTA record
+        return_description = "Original_Query_Protein " + str(self.hit[0]) + " BLAST_Hit_Accession " + str(self.hit[1])
 
-                for i in range(REQUEST_LIMIT):
 
-                    try:
+        # If there is only one coding region in the selected sequence, then
+        # the sequence is returned unmodified.
+        if len(coding_intervals) == 1:
+            # Appends information to record description
+            print("\t\tOnly one coding regions found. Returning full sequence...")
+            return SeqRecord(Seq.Seq(sequence), id=return_id, description=return_description)
 
-                        handle = Entrez.efetch(db="nuccore", id=nuc_rec['acc'], strand=s_strand,
-                                               seq_start=s_start, seq_stop=s_stop,
-                                               rettype='fasta', retmode="txt")
+        # If no coding intervals are indentified, None is returned.
+        elif len(coding_intervals) == 0:
+            print("\t\t|~> No coding intervals found for record: " + str(self.nuc_rec['acc']) + ".")
+            return None
 
-                        time.sleep(SLEEP_TIME)
-                        break
+        the_end = 0 #for now
+        upstream_regions = []
+        upstream_sequences = []
 
-                    except:
+        # LATER make sure to implement a way to add 10,000 more when you dont reach the end
+        for i in range(len(coding_intervals)):
+            if i > 0:
+                if coding_intervals[i][1] - coding_intervals[i-1][0] <= self.blast_param["min_intergenic_distance"]:
+                    print("poop ye " + str(coding_intervals[i-1][1] - coding_intervals[i][0]))
+                    if coding_intervals[i-1][1] - coding_intervals[i][0] > 0:
+                        upstream_regions.append((coding_intervals[i-1][1], coding_intervals[i][0]))
+                elif coding_intervals[i-1][2] == coding_intervals[i][2]:
+                    if coding_intervals[i-1][1] - coding_intervals[i][0] > 0:
+                        upstream_regions.append((coding_intervals[i - 1][1], coding_intervals[i][0]))
+                else:
+                    the_end = coding_intervals[i][0]
+                    break
 
-                        print("\t\tNCBI exception raised on attempt " + str(i) + "\n\t\treattempting now...")
+        print(upstream_regions)
+        # get sequences of each upstream region
+        for i in range(len(upstream_regions)):
+            print("poop")
+            upstream_sequence = sequence[upstream_regions[i][0]:upstream_regions[i][1]]
+            upstream_sequences.append(SeqRecord(Seq.Seq(upstream_sequence), id=return_id, description=return_description))
 
-                        if i == (REQUEST_LIMIT - 1):
-                            print("\t\tCould not download record after " + str(REQUEST_LIMIT) + " attempts")
-
-                print("\t|~> Returnig sequence")
-                return SeqIO.read(handle, "fasta")
+        print(upstream_sequences)
+        return upstream_sequences
