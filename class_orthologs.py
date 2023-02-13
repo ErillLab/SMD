@@ -1,7 +1,7 @@
 # File Name: class_input.py
 # Author: Hannah Nguyen
 # Date: 9/22/22
-# Description: Input class  , in information from json file
+# Description: orthologs class
 
 from Bio import Seq, Entrez, SeqIO
 from Bio.SeqRecord import SeqRecord
@@ -26,20 +26,18 @@ class theOrtholog:
 
     def get_nuc_rec(self):
         print("Getting IPG nucelotide records for " + str(self.hit[1]) + "...")
-        # Fetch the protein record
         print("\tFetching the protein records...")
-
+        # Fetches protein records for each hit
         for i in range(self.entrez_param["retry_number"]):
-
             try:
-                records = Entrez.read(Entrez.efetch(db="protein", id=self.hit[1], rettype="ipg",
-                                                    retmode="xml"))
+                handle = Entrez.efetch(db="protein", id=self.hit[1], rettype="ipg",
+                                                    retmode="xml")
+                records = Entrez.read(handle)
                 time.sleep(self.entrez_param["sleep_time"])
                 break
-
             except:
                 print("\t\tNCBI exception raised on attempt " + str(i) + "\n\t\treattempting now...")
-
+                time.sleep(self.entrez_param["sleep_time"])
                 if i == (self.entrez_param["retry_number"] - 1):
                     print("\t\tCould not download record after " + str(self.entrez_param["retry_number"]) + " attempts")
                     print("\tNo gene records found for " + str(self.hit[1]))
@@ -57,7 +55,6 @@ class theOrtholog:
 
         # Gene records are appended to this list
         genome_list = []
-
         print("\tRecording the gene records with priorities...")
         if 'ProteinList' in records['IPGReport'].keys():
             for idprotein in records['IPGReport']['ProteinList']:
@@ -102,11 +99,11 @@ class theOrtholog:
 
     def get_nuc_seq(self):
         if self.nuc_rec is None:
+            print(self.nuc_rec)
             print("\tRecord is not valid")
             return None
 
         print("Get nucleotide sequence for " + str(self.nuc_rec['acc']) + "...")
-
         # grabs upstream region some parameter base pairs away from start to check for operons
         if self.nuc_rec['strand'] == '+':
             s_start = int(self.nuc_rec['start']) - self.blast_param["base_pairs_to_grab"]
@@ -119,10 +116,6 @@ class theOrtholog:
             s_start = int(self.nuc_rec['start']) + self.blast_param["base_pairs_to_grab"]
             s_strand = 2
 
-
-        print("start " + str(s_start))
-        print("stop " + str(s_stop))
-
         print("\t\tGetting genbank record...")
 
         # Fetch and read the annotated GenBank record
@@ -130,19 +123,21 @@ class theOrtholog:
             try:
                 handle = Entrez.efetch(db="nuccore", id=self.nuc_rec['acc'], strand=s_strand,
                                        seq_start=s_start, seq_stop=s_stop,
-                                       rettype='gbwithparts', retmode="xml")
-
-                genome_record = Entrez.read(handle, "xml")
+                                       rettype='gbwithparts', retmode="text")
                 time.sleep(self.entrez_param["sleep_time"])
+                genome_record = SeqIO.read(handle, "genbank")
                 break
-
             except:
-
                 print("\t\tNCBI exception raised on attempt " + str(i) + "\n\t\treattempting now...")
-
+                time.sleep(self.entrez_param["sleep_time"])
                 if i == (self.entrez_param["retry_number"] - 1):
                     print("\t\tCould not download record after " + str(self.entrez_param["retry_number"]) + " attempts")
 
+        sequence = genome_record.seq
+
+        print(genome_record.features)
+
+'''
         print("\t\tParsing intervals for coding regions...")
         # Find all coding regions in the returned GenBank sequence.
         coding_intervals = []
@@ -168,7 +163,7 @@ class theOrtholog:
         #Setting up the description for the FASTA record
         return_description = "Original_Query_Protein " + str(self.hit[0]) + " BLAST_Hit_Accession " + str(self.hit[1])
 
-
+'''
         # If there is only one coding region in the selected sequence, then
         # the sequence is returned unmodified.
         if len(coding_intervals) == 1:
@@ -188,13 +183,13 @@ class theOrtholog:
         # LATER make sure to implement a way to add 10,000 more when you dont reach the end
         for i in range(len(coding_intervals)):
             if i > 0:
-                if coding_intervals[i][1] - coding_intervals[i-1][0] <= self.blast_param["min_intergenic_distance"]:
-                    print("poop ye " + str(coding_intervals[i-1][1] - coding_intervals[i][0]))
-                    if coding_intervals[i-1][1] - coding_intervals[i][0] > 0:
+                print("poop ye " + str(coding_intervals[i][0] - coding_intervals[i-1][1]))
+                if coding_intervals[i][0] - coding_intervals[i-1][1] <= self.blast_param["min_intergenic_distance"]:
+                    if coding_intervals[i][0] - coding_intervals[i-1][1] > 0:
                         upstream_regions.append((coding_intervals[i-1][1], coding_intervals[i][0]))
-                elif coding_intervals[i-1][2] == coding_intervals[i][2]:
-                    if coding_intervals[i-1][1] - coding_intervals[i][0] > 0:
-                        upstream_regions.append((coding_intervals[i - 1][1], coding_intervals[i][0]))
+                elif coding_intervals[i][2] == coding_intervals[i-1][2]:
+                    if coding_intervals[i][1] - coding_intervals[i-1][0] > 0:
+                        upstream_regions.append((coding_intervals[i-1][1], coding_intervals[i][0]))
                 else:
                     the_end = coding_intervals[i][0]
                     break

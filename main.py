@@ -21,36 +21,24 @@ if __name__ == "__main__":
     # loads json file
     the_input.load_json()
 
+    '''
     # do blast search (either regular, clustered, or hierarchical)
     hits = []
-    '''
     if the_input.blast_param["hierarchical_taxon_level"] != "None":
         hits = the_input.hierarchical_BLAST_search()
     else:
         hits = the_input.reg_BLAST_search()
-    '''
 
     #hits = [({'prot_id': 'WP_011079176'}, 'WP_011079176.1')]
-
     #hits = [({'prot_id': 'WP_011079176'}, 'WP_039469417.1')]
-
+    '''
     hits = [({'prot_id': 'WP_011079176'}, 'WP_053542922.1')]
-
-    print(hits)
 
     # treats each hit from the blast search as a potential ortholog and adds to list of orthologs
     orthologs = []
-    for i in range(len(hits)):
-        orthologs.append(theOrtholog(the_input, hits[i]))
-    print()
+    for hit in hits:
+        orthologs.append(theOrtholog(the_input, hit))
 
-    for i in range(len(orthologs)):
-        orthologs[i].get_nuc_rec() #gets nucleotide record for each ortholog
-        print(orthologs[i].nuc_rec)
-        orthologs[i].get_nuc_seq() #get nucleotide sequence from the record for each ortholog
-
-
-
-
-
-
+    for potential_olog in orthologs:
+        potential_olog.get_nuc_rec() #gets nucleotide record for each ortholog
+        potential_olog.get_nuc_seq() #get nucleotide sequence from the record for each ortholog

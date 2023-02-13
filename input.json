@@ -1,14 +1,14 @@
 {
-	"reference_proteins" : [{"prot_id" : "WP_074541780.1", "sequence" : "mnedeiyrhi"}],
-	"target_clade" : 91347,
+	"reference_proteins" : [{"prot_id" : "WP_011079176"}],
+	"target_clade" : 135623,
 	"BLAST_parameters" : {
 			"e_value" : 10e-05,
 			"query_coverage" : 0.75,
 			"database" : "nr",
-			"max_results" : 200,
-			"min_intergenic_distance" : 150,
+			"max_results" : 10,
+			"min_intergenic_distance" : 100,
+			"base_pairs_to_grab" : 10000,
 			"hierarchical_taxon_level" : "None"
-
 	},
 	"entrez_parameters" : {
 					"email" : "hannahn281@gmail.com",
