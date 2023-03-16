@@ -29,16 +29,38 @@ if __name__ == "__main__":
     else:
         hits = the_input.reg_BLAST_search()
 
-    #hits = [({'prot_id': 'WP_011079176'}, 'WP_011079176.1')]
-    #hits = [({'prot_id': 'WP_011079176'}, 'WP_039469417.1')]
     '''
-    hits = [({'prot_id': 'WP_011079176'}, 'WP_053542922.1')]
+    #hits = [({'prot_id': 'WP_011079176'}, 'WP_011079176.1')]
+    hits = [({'prot_id': 'WP_011079176'}, 'WP_272923659.1')]
+    #hits = [({'prot_id': 'WP_011079176'}, 'WP_039469417.1')]
+    #hits = [({'prot_id': 'WP_011079176'}, 'WP_053542922.1')]
 
     # treats each hit from the blast search as a potential ortholog and adds to list of orthologs
     orthologs = []
     for hit in hits:
         orthologs.append(theOrtholog(the_input, hit))
 
+    # prepares an ortholog dictionary for later
+    orthologs_dict = {}
+    #goes through orthologs list to add to ortho dictionary and get records/sequences
     for potential_olog in orthologs:
+        orthologs_dict[potential_olog.hit] = ""
         potential_olog.get_nuc_rec() #gets nucleotide record for each ortholog
         potential_olog.get_nuc_seq() #get nucleotide sequence from the record for each ortholog
+
+    # goes through list of orthologs and does popping algorithm that marks sequences that are too similar
+    for first_ortholog in range(len(orthologs)):
+        compared_ortholog = first_ortholog+1 # compares first ortholog with ortholog after it
+        while compared_ortholog < len(orthologs):
+            # gets percent similarity and marks in dictionary if above the threshold
+            per_similarity = orthologs[first_ortholog].percent_similarity(orthologs[compared_ortholog])
+            if per_similarity < 8: #checks if ortholog is less
+                orthologs_dict[compared_ortholog.hit] = "DELETE"
+            compared_ortholog += 1
+
+    # goes through ortholog dictionary to finalize which orthologs can stay
+    for ortholog_key in orthologs_dict:
+        if orthologs_dict[ortholog_key] == "DELETE":
+            for ortholog in orthologs:
+                if (ortholog.hit == ortholog_key):
+                    orthologs.remove(ortholog)

@@ -3,9 +3,8 @@
 # Date: 9/22/22
 # Description: orthologs class
 
-from Bio import Seq, Entrez, SeqIO
+from Bio import Seq, Entrez, SeqIO, Align
 from Bio.SeqRecord import SeqRecord
-from Bio.Blast import NCBIWWW, NCBIXML
 import time
 
 class theOrtholog:
@@ -36,7 +35,7 @@ class theOrtholog:
                 time.sleep(self.entrez_param["sleep_time"])
                 break
             except:
-                print("\t\tNCBI exception raised on attempt " + str(i) + "\n\t\treattempting now...")
+                print("\t\tNCBI exception raised on attempt " + str(i+1) + "\n\t\treattempting now...")
                 time.sleep(self.entrez_param["sleep_time"])
                 if i == (self.entrez_param["retry_number"] - 1):
                     print("\t\tCould not download record after " + str(self.entrez_param["retry_number"]) + " attempts")
@@ -87,6 +86,9 @@ class theOrtholog:
                 if genome["p_score"] > max_p_record["p_score"]:
                     max_p_record = genome
 
+            print("Record Name: " + max_p_record['acc'])
+            print("Original Region: " + str(max_p_record['start']) + ", " + str(max_p_record['stop']))
+
             print("\tReturning gene record for " + self.hit[1] + ". p-score: " +
                   str(max_p_record["p_score"]))
             self.nuc_rec = max_p_record
@@ -109,13 +111,14 @@ class theOrtholog:
             s_start = int(self.nuc_rec['start']) - self.blast_param["base_pairs_to_grab"]
             if s_start <= 0:
                 s_start = 1
-            s_stop = int(self.nuc_rec['stop'])
+            s_stop = int(self.nuc_rec['start'])
             s_strand = 1
         else:
-            s_stop = int(self.nuc_rec['stop'])
-            s_start = int(self.nuc_rec['start']) + self.blast_param["base_pairs_to_grab"]
+            s_stop = int(self.nuc_rec['stop']) + self.blast_param["base_pairs_to_grab"]
+            s_start = int(self.nuc_rec['stop'])
             s_strand = 2
 
+        print("Region after going upstream: " + str(s_start) + ", " + str(s_stop))
         print("\t\tGetting genbank record...")
 
         # Fetch and read the annotated GenBank record
@@ -128,34 +131,14 @@ class theOrtholog:
                 genome_record = SeqIO.read(handle, "genbank")
                 break
             except:
-                print("\t\tNCBI exception raised on attempt " + str(i) + "\n\t\treattempting now...")
+                print("\t\tNCBI exception raised on attempt " + str(i+1) + "\n\t\treattempting now...")
                 time.sleep(self.entrez_param["sleep_time"])
                 if i == (self.entrez_param["retry_number"] - 1):
                     print("\t\tCould not download record after " + str(self.entrez_param["retry_number"]) + " attempts")
 
         sequence = genome_record.seq
 
-        print(genome_record.features)
-
-'''
-        print("\t\tParsing intervals for coding regions...")
-        # Find all coding regions in the returned GenBank sequence.
-        coding_intervals = []
-
-        sequence = genome_record[0]['GBSeq_sequence']
-
-        for feature in genome_record[0]['GBSeq_feature-table']:
-            if feature['GBFeature_key'] == 'gene':
-                if feature['GBFeature_location'].startswith("complement"):
-                    strand = 2
-                else:
-                    strand = 1
-                if "GBInterval_from" in feature['GBFeature_intervals'][0]:
-                    coding_start = feature['GBFeature_intervals'][0]['GBInterval_from']
-                    coding_end = feature['GBFeature_intervals'][0]['GBInterval_to']
-                    coding_intervals.append((int(coding_start), int(coding_end), strand))
-
-        print(coding_intervals)
+        #print(genome_record.features)
 
         # setting up return id
         return_id = "p_" + str(self.nuc_rec['acc'])
@@ -163,43 +146,84 @@ class theOrtholog:
         #Setting up the description for the FASTA record
         return_description = "Original_Query_Protein " + str(self.hit[0]) + " BLAST_Hit_Accession " + str(self.hit[1])
 
-'''
         # If there is only one coding region in the selected sequence, then
         # the sequence is returned unmodified.
-        if len(coding_intervals) == 1:
+        gb_features = genome_record.features
+        if len(gb_features) == 1:
             # Appends information to record description
             print("\t\tOnly one coding regions found. Returning full sequence...")
             return SeqRecord(Seq.Seq(sequence), id=return_id, description=return_description)
 
         # If no coding intervals are indentified, None is returned.
-        elif len(coding_intervals) == 0:
+        elif len(gb_features) == 0:
             print("\t\t|~> No coding intervals found for record: " + str(self.nuc_rec['acc']) + ".")
             return None
 
-        the_end = 0 #for now
+        genes = []
+        for i in range(len(gb_features)):
+            if gb_features[i].type == 'gene':
+                genes.append(gb_features[i])
+
         upstream_regions = []
-        upstream_sequences = []
-
-        # LATER make sure to implement a way to add 10,000 more when you dont reach the end
-        for i in range(len(coding_intervals)):
-            if i > 0:
-                print("poop ye " + str(coding_intervals[i][0] - coding_intervals[i-1][1]))
-                if coding_intervals[i][0] - coding_intervals[i-1][1] <= self.blast_param["min_intergenic_distance"]:
-                    if coding_intervals[i][0] - coding_intervals[i-1][1] > 0:
-                        upstream_regions.append((coding_intervals[i-1][1], coding_intervals[i][0]))
-                elif coding_intervals[i][2] == coding_intervals[i-1][2]:
-                    if coding_intervals[i][1] - coding_intervals[i-1][0] > 0:
-                        upstream_regions.append((coding_intervals[i-1][1], coding_intervals[i][0]))
+        if self.nuc_rec['strand'] == '+':
+            # starts at end of list of features since we are going upstream
+            gene = len(genes) - 1
+            # LATER make sure to implement a way to add 10,000 more when you dont reach the end
+            while gene > 0:
+                print("here")
+                if len(upstream_regions) == 0:
+                    upstream_regions.append((genes[gene - 1].location.end, genes[gene].location.start))
+                elif genes[gene].location.strand == genes[gene - 1].location.strand:
+                    if abs(genes[gene].location.start - genes[gene - 1].location.end) <= self.blast_param["min_intergenic_distance"]:
+                        if abs(genes[gene].location.start - genes[gene - 1].location.end) > 0:
+                            upstream_regions.append((genes[gene - 1].location.end, genes[gene].location.start))
+                    else:
+                        break
                 else:
-                    the_end = coding_intervals[i][0]
                     break
+                gene -= 1
+        else:
+            # starts at beginning of list of features since we are going upstream on reverse strand
+            gene = 0
+            # LATER make sure to implement a way to add 10,000 more when you dont reach the end
+            while gene < len(genes) - 1:
+                distance = genes[gene].location.start - genes[gene + 1].location.end
+                if len(upstream_regions) == 0:
+                    upstream_regions.append((genes[gene + 1].location.end, genes[gene].location.start))
+                elif genes[gene].location.strand == genes[gene + 1].location.strand:
+                    if distance <= self.blast_param["min_intergenic_distance"]:
+                        print("region: ")
+                        print(genes[gene+1].location.end, genes[gene].location.start)
+                        print("distance: " + str(genes[gene].location.start - genes[gene + 1].location.end))
+                        if (genes[gene].location.start - genes[gene + 1].location.end) > 0:
+                            upstream_regions.append((genes[gene + 1].location.end, genes[gene].location.start))
+                    else:
+                        break
+                else:
+                    break
+                gene += 1
 
+        print("Upstream Regions to Take: ")
         print(upstream_regions)
+
         # get sequences of each upstream region
+        upstream_sequences = []
         for i in range(len(upstream_regions)):
-            print("poop")
             upstream_sequence = sequence[upstream_regions[i][0]:upstream_regions[i][1]]
             upstream_sequences.append(SeqRecord(Seq.Seq(upstream_sequence), id=return_id, description=return_description))
 
-        print(upstream_sequences)
-        return upstream_sequences
+        print(upstream_sequences[0].seq.complement().reverse_complement())
+        return upstream_sequence
+
+    def percent_similarity(self, ortholog2):
+        # percent_similarity = (matches / matches + mismatches)
+        aligner = Align.PairwiseAligner()
+        alignments = aligner.align(self.nuc_seq, ortholog2.nuc_seq)
+        alignment = alignments[0]
+
+        # counts number of matches and mismatches to show percent similarity
+        matches = alignment.counts().identities
+        mismatches = alignment.counts().mismatches
+        per_similarity = (matches / (matches+mismatches))
+        return per_similarity
+
