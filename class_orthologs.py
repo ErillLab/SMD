@@ -100,12 +100,15 @@ class theOrtholog:
 
 
     def get_nuc_seq(self):
+
+        # if no record then we cant find seq
         if self.nuc_rec is None:
             print(self.nuc_rec)
             print("\tRecord is not valid")
             return None
 
         print("Get nucleotide sequence for " + str(self.nuc_rec['acc']) + "...")
+
         # grabs upstream region some parameter base pairs away from start to check for operons
         if self.nuc_rec['strand'] == '+':
             s_start = int(self.nuc_rec['start']) - self.blast_param["base_pairs_to_grab"]
@@ -138,8 +141,6 @@ class theOrtholog:
 
         sequence = genome_record.seq
 
-        #print(genome_record.features)
-
         # setting up return id
         return_id = "p_" + str(self.nuc_rec['acc'])
 
@@ -165,23 +166,23 @@ class theOrtholog:
                 genes.append(gb_features[i])
 
         upstream_regions = []
-        if self.nuc_rec['strand'] == '+':
-            # starts at end of list of features since we are going upstream
-            gene = len(genes) - 1
-            # LATER make sure to implement a way to add 10,000 more when you dont reach the end
-            while gene > 0:
-                print("here")
-                if len(upstream_regions) == 0:
-                    upstream_regions.append((genes[gene - 1].location.end, genes[gene].location.start))
-                elif genes[gene].location.strand == genes[gene - 1].location.strand:
-                    if abs(genes[gene].location.start - genes[gene - 1].location.end) <= self.blast_param["min_intergenic_distance"]:
-                        if abs(genes[gene].location.start - genes[gene - 1].location.end) > 0:
-                            upstream_regions.append((genes[gene - 1].location.end, genes[gene].location.start))
-                    else:
-                        break
+        # starts at end of list of features since we are going upstream
+        gene = len(genes) - 1
+        # LATER make sure to implement a way to add 10,000 more when you dont reach the end
+        while gene > 0:
+            print("here")
+            if len(upstream_regions) == 0:
+                upstream_regions.append((genes[gene - 1].location.end, genes[gene].location.start))
+            elif genes[gene].location.strand == genes[gene - 1].location.strand:
+                if abs(genes[gene].location.start - genes[gene - 1].location.end) <= self.blast_param["min_intergenic_distance"]:
+                    if abs(genes[gene].location.start - genes[gene - 1].location.end) > 0:
+                        upstream_regions.append((genes[gene - 1].location.end, genes[gene].location.start))
                 else:
                     break
-                gene -= 1
+            else:
+                break
+            gene -= 1
+        '''
         else:
             # starts at beginning of list of features since we are going upstream on reverse strand
             gene = 0
@@ -202,6 +203,7 @@ class theOrtholog:
                 else:
                     break
                 gene += 1
+        '''
 
         print("Upstream Regions to Take: ")
         print(upstream_regions)
@@ -209,10 +211,18 @@ class theOrtholog:
         # get sequences of each upstream region
         upstream_sequences = []
         for i in range(len(upstream_regions)):
-            upstream_sequence = sequence[upstream_regions[i][0]:upstream_regions[i][1]]
-            upstream_sequences.append(SeqRecord(Seq.Seq(upstream_sequence), id=return_id, description=return_description))
+            upstream_sequence = sequence
+            if sequence[upstream_regions[i][0]:upstream_regions[i][1]] != "":
+                upstream_sequence = sequence[upstream_regions[i][0]:upstream_regions[i][1]]
+                upstream_sequences.append(SeqRecord(Seq.Seq(upstream_sequence), id=return_id, description=return_description))
+            else:
+                upstream_sequence = sequence[upstream_regions[i][1]:upstream_regions[i][0]]
+                upstream_sequences.append(SeqRecord(Seq.Seq(upstream_sequence), id=return_id, description=return_description))
 
-        print(upstream_sequences[0].seq.complement().reverse_complement())
+        print(upstream_sequence)
+
+        self.nuc_seq = upstream_sequence
+
         return upstream_sequence
 
     def percent_similarity(self, ortholog2):
