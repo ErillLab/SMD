@@ -110,7 +110,7 @@ class theInput:
             # Adds each unique accession number to hits[]
             for record in blast_records.alignments:
                 hit_rec = record.hit_id.split('|')[-2]
-                print("\t\tAnalyzing hit " + str(curr_hit_rec))
+                print("\t\tAnalyzing hit " + str(hit_rec))
 
                 for hit in record.hsps:
                     # Checks if hit meets the minimum coverage if provided
