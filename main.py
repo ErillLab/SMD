@@ -21,7 +21,7 @@ if __name__ == "__main__":
     # loads json file
     the_input.load_json()
 
-    '''
+
     # do blast search (either regular, clustered, or hierarchical)
     hits = []
     if the_input.blast_param["hierarchical_taxon_level"] != "None":
@@ -34,6 +34,7 @@ if __name__ == "__main__":
     hits = [({'prot_id': 'WP_011079176'}, 'WP_272923659.1')]
     #hits = [({'prot_id': 'WP_011079176'}, 'WP_039469417.1')]
     #hits = [({'prot_id': 'WP_011079176'}, 'WP_053542922.1')]
+    '''
 
     # treats each hit from the blast search as a potential ortholog and adds to list of orthologs
     orthologs = []
@@ -44,9 +45,12 @@ if __name__ == "__main__":
     orthologs_dict = {}
     #goes through orthologs list to add to ortho dictionary and get records/sequences
     for potential_olog in orthologs:
-        orthologs_dict[potential_olog.hit] = ""
+        olog_key = potential_olog.hit[1]
+        orthologs_dict[olog_key] = ""
         potential_olog.get_nuc_rec() #gets nucleotide record for each ortholog
         potential_olog.get_nuc_seq() #get nucleotide sequence from the record for each ortholog
+
+    print(orthologs)
 
     # goes through list of orthologs and does popping algorithm that marks sequences that are too similar
     for first_ortholog in range(len(orthologs)):
@@ -55,7 +59,7 @@ if __name__ == "__main__":
             # gets percent similarity and marks in dictionary if above the threshold
             per_similarity = orthologs[first_ortholog].percent_similarity(orthologs[compared_ortholog])
             if per_similarity < 8: #checks if ortholog is less
-                orthologs_dict[compared_ortholog.hit] = "DELETE"
+                orthologs_dict[orthologs[compared_ortholog].hit] = "DELETE"
             compared_ortholog += 1
 
     # goes through ortholog dictionary to finalize which orthologs can stay
@@ -64,3 +68,5 @@ if __name__ == "__main__":
             for ortholog in orthologs:
                 if (ortholog.hit == ortholog_key):
                     orthologs.remove(ortholog)
+
+    print(orthologs)
